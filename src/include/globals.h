@@ -219,30 +219,82 @@ struct mode_info_t {
 };
 extern const struct mode_info_t mode_info[NUM_MODES];
 
+/// Stores a element of the frequency list.
 class qrg_mode_t
 {
 public:
-	long long rfcarrier;
+	long long   rfcarrier;
 	std::string rmode;
-	int carrier;
-	trx_mode mode;
+	int         carrier;
+	trx_mode    mode;
+	std::string name;
+	std::string description;
+	short       time_on;  // 0000 to 2359
+	short       time_off; // 0000 to 2359
+	char        week_schedule : 7 ;
 
-	qrg_mode_t() : rfcarrier(0), rmode("NONE"), carrier(0), mode(NUM_MODES) { }
-	qrg_mode_t(long long rfc_, std::string rm_, int c_, trx_mode m_)
-                : rfcarrier(rfc_), rmode(rm_), carrier(c_), mode(m_) { }
+	typedef enum {
+		FREQS_NONE,
+		FREQS_EIBI,
+		FREQS_MWLIST,
+		FREQS_UNKNOWN
+	} FreqSource ;
+
+	FreqSource data_source ;
+
+	enum {
+		WEEK_SUNDAY    = 0,
+		WEEK_MONDAY    = 1,
+		WEEK_TUESDAY   = 2,
+		WEEK_WEDNESDAY = 3,
+		WEEK_THURSDAY  = 4,
+		WEEK_FRIDAY    = 5,
+		WEEK_SATURDAY  = 6
+	};
+	// Other data might follow such as the country or the language but we do not care.
+
+	/// Some data come from fixed files, no need to save them.
+	bool is_source(FreqSource src) const { return data_source == src ; }
+
+	/// Empty strings take no space.
+	qrg_mode_t(long long rfcarr=0);
+
+	qrg_mode_t(
+		long long rfcarr,
+		const char *rmd,
+		int carr,
+		const trx_mode & trxmd,
+		const char * nam = NULL,
+		const char * dsc = NULL );
+
+	/// It is stored in a vector sorted by frequency.
 	bool operator<(const qrg_mode_t& rhs) const
-        {
-		return rfcarrier < rhs.rfcarrier;
+	{
+		int ret ;
+		( ret = rfcarrier - rhs.rfcarrier  ) ||
+		( ret =	mode - rhs.mode            ) ||
+		( ret =	carrier - rhs.carrier      ) ||
+		( ret =	rmode.compare( rhs.rmode ) ) ||
+		( ret =	name.compare( rhs.name ) );
+		return ret < 0 ;
 	}
+	/// Compare first the integer members because it is faster.
 	bool operator==(const qrg_mode_t& rhs) const
 	{
-		return rfcarrier == rhs.rfcarrier && rmode == rhs.rmode &&
-		       carrier == rhs.carrier && mode == rhs.mode;
+		return rfcarrier == rhs.rfcarrier
+		&& mode == rhs.mode
+		&& carrier == rhs.carrier
+		&& rmode == rhs.rmode
+		&& name  == rhs.name ;
 	}
-        std::string str(void);
+
+	std::string str(void) const ;
+
+	friend std::ostream& operator<<(std::ostream& s, const qrg_mode_t& m);
+
+	friend std::istream& operator>>(std::istream& s, qrg_mode_t& m);
+
 };
-std::ostream& operator<<(std::ostream& s, const qrg_mode_t& m);
-std::istream& operator>>(std::istream& s, qrg_mode_t& m);
 
 #include <bitset>
 class mode_set_t : public std::bitset<NUM_RXTX_MODES> { };

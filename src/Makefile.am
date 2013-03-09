@@ -156,6 +156,14 @@ if WANT_FLDIGI
 	    $(mkinstalldirs) $(DESTDIR)/$(datadir)/fldigi; \
 	    $(INSTALL_DATA) $(srcdir)/../data/ToR-Stats-SHIP.csv $(DESTDIR)/$(pkgdatadir); \
 	fi
+	if test -f $(srcdir)/../data/sked-b12.csv; then \
+	    $(mkinstalldirs) $(DESTDIR)/$(datadir)/fldigi; \
+	    $(INSTALL_DATA) $(srcdir)/../data/sked-b12.csv $(DESTDIR)/$(pkgdatadir); \
+	fi
+	if test -f $(srcdir)/../data/mwlist.txt; then \
+	    $(mkinstalldirs) $(DESTDIR)/$(datadir)/fldigi; \
+	    $(INSTALL_DATA) $(srcdir)/../data/mwlist.txt $(DESTDIR)/$(pkgdatadir); \
+	fi
 	if test -f $(srcdir)/../data/wmo_list.txt; then \
 	    $(mkinstalldirs) $(DESTDIR)/$(datadir)/fldigi; \
 	    $(INSTALL_DATA) $(srcdir)/../data/wmo_list.txt $(DESTDIR)/$(pkgdatadir); \
@@ -760,6 +768,8 @@ EXTRA_DIST = \
 	$(srcdir)/../data/nsd_bbsss.txt \
 	$(srcdir)/../data/station_table.txt \
 	$(srcdir)/../data/ToR-Stats-SHIP.csv \
+	$(srcdir)/../data/sked-b12.csv \
+	$(srcdir)/../data/mwlist.txt \
 	$(srcdir)/../data/mac/Info.plist.in \
 	$(srcdir)/../data/mac/fldigi.icns \
 	$(srcdir)/../data/win32/fldigi.ico \

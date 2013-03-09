@@ -49,7 +49,7 @@
 #include "gettext.h"
 #include "debug.h"
 #include "field_def.h"
-
+#include "record_loader.h"
 #include "coordinate.h"
 #include "strutil.h"
 
@@ -513,6 +513,7 @@ public:
 
 // ----------------------------------------------------------------------------
 
+
 /// This wraps a record type and allows to load a cvs file and access it using a key.
 template< class Key, class Record, Key (Record::*Method)(void) const, class Terminal >
 class Catalog : public RecordLoader< Terminal >
@@ -520,14 +521,18 @@ class Catalog : public RecordLoader< Terminal >
 	/// The keying method might return a reference instead of a value.
 	template< class Type > struct deref { typedef Type type ; };
 	template< class Type > struct deref< Type & > { typedef Type type ; };
-	/// If the return value of the indexing function is for example a reference
-	/// to a const string, then KeyType is a string.
+
+	/// If the index function return value is for example a string reference then KeyType is a string.
 	template< class Type > struct deref< const Type & > { typedef Type type ; };
 protected:
+	/// The key is a method of the record type.
 	typedef typename deref< Key >::type KeyType ;
+
+	/// The key must be unique.
 	typedef std::map< KeyType, Record > CatalogType ;
 	typedef typename CatalogType::iterator IteratorType ;
 
+	/// This stores all the object loaded from a file.
 	CatalogType m_catalog ;
 
 	bool FillAndTest() {
@@ -551,8 +556,7 @@ public:
 			m_catalog[ (tmp.*Method)() ] = tmp ;
 			return true ;
 		}
-		ifs.close();
-		LOG_INFO( _("Closing:%s with %d records"), filnam.c_str(), (int)m_catalog.size());
+		return false ;
 	}
 
 	/// Returns a station with wmo_indicator to zero if cannot find the right one.
@@ -763,7 +767,7 @@ struct CatalogJComm : public Catalog< const std::string &, RecordJComm, &RecordJ
 // Returns true if properly initialised.
 // TODO: Have all the derived class link to the base class so the initialisation
 // can be done without having to enumerate the sub-classes.
-bool SynopDB::Init( const std::string & data_dir )
+bool SynopDB::Init()
 {
 	try
 	{

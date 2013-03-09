@@ -183,12 +183,12 @@ static void KmlHeader( std::ostream & ostrm, const std::string & title ) {
 		"<name>" << title << "</name>\n" ;
 }
 
-// Appended at the end of each KML document.
+/// Appended at the end of each KML document.
 static const char KmlFooter[] = 
 	"</Document>\n"
 	"</kml>\n" ;
 
-// Contains for example GIF images, and all the styles. Can be customised by the user.
+/// Contains for example GIF images, and all the styles. Can be customised by the user.
 static const std::string namStyles = "styles.kml";
 
 /** Used to code the data for reloading. The description tag is too complicated
@@ -850,15 +850,17 @@ class  KmlSrvImpl : public KmlServer {
 
 	/// This file copy does not need to be atomic because it happens once only.
 	void CopyStyleFileIfNotExists(void) {
-		// Where the installed file is stored. Used as default.
+		/// Where the installed file is stored and never moved from. Used as default.
 		std::string namSrc = PKGDATADIR "/kml/" + namStyles ;
 
 		/// The use might customize its styles file: It will not be altered.
 		std::string namDst = m_kml_dir + namStyles ;
 
+		/// Used to copy the master file to the user copy if needed.
 		FILE * filSrc = NULL;
 		FILE * filDst = fopen( namDst.c_str(), "r" );
-		// If the file is there, leave as it is because it is maybe customize.
+
+		/// If the file is there, leave as it is because it is maybe customize.
 		if( filDst ) {
 			LOG_INFO("Style file %s not altered", namDst.c_str() );
 			goto close_and_quit ;
@@ -873,6 +875,8 @@ class  KmlSrvImpl : public KmlServer {
 			LOG_INFO("Cannot open source style file %s", namSrc.c_str() );
 			goto close_and_quit ;
 		}
+
+		/// Transient buffer to copy the file.
     		char buffer[BUFSIZ];
     		size_t n;
 
@@ -896,7 +900,7 @@ class  KmlSrvImpl : public KmlServer {
 
 		LOG_INFO("Creating baseFil=%s", baseFil.c_str() );
 
-		// We do not need to make this file aomtic because it is read once only.
+		/// We do not need to make this file atomic because it is read once only.
 		AtomicRenamer ar( baseFil );
 
 		KmlHeader( ar, "Fldigi");
@@ -916,7 +920,7 @@ class  KmlSrvImpl : public KmlServer {
 		PlacesMapT::const_iterator beg,
 		PlacesMapT::const_iterator last ) {
 
-		// The polyline gets an id based on the beginning of the path, which will never change.
+		/// The polyline gets an id based on the beginning of the path, which will never change.
 		ostrm
 			<< "<Placemark id=\"" << beg->second.KmlId() << ":Path\">"
 			"<name>" << beg->second.KmlId() << "</name>"

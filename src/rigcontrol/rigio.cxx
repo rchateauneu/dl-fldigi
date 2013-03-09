@@ -470,8 +470,8 @@ string rigCAT_getmode()
 {
 	XMLIOS modeCmd;
 	list<XMLIOS>::iterator itrCmd;
-	list<MODE>::iterator mode;
-	list<MODE> *pmode;
+	list<RIGMODE>::iterator mode;
+	list<RIGMODE> *pmode;
 	string strCmd, mData;
 	size_t len;
 
@@ -588,8 +588,8 @@ void rigCAT_setmode(const string& md)
 		strCmd.append(modeCmd.str1);
 
 	if ( modeCmd.data.size > 0 ) {
-		list<MODE>::iterator mode;
-		list<MODE> *pmode;
+		list<RIGMODE>::iterator mode;
+		list<RIGMODE> *pmode;
 		if (lmodes.empty() == false)
 			pmode = &lmodes;
 		else if (lmodeCMD.empty() == false)

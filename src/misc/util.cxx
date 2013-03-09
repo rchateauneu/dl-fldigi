@@ -454,7 +454,7 @@ const char * create_directory( const char * dir )
 		return WindowsError(err);
 	}
 #else
-	if ( mkdir(dir, 0777)) == -1 ) {
+	if ( mkdir(dir, 0777) == -1 ) {
 		if( errno == EEXIST ) return NULL ;
 		return strerror(errno);
 	}
