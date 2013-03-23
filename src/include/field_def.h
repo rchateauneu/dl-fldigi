@@ -36,6 +36,7 @@ SRX,
 STX,
 TX_PWR,
 EXPORT, // flag used internally in fldigi's logbook
+QSL_VIA,
 NUMFIELDS };
 
 // ADIF multiline string is a sequence of Characters and line-breaks,
