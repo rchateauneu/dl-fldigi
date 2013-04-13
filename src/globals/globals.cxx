@@ -238,7 +238,6 @@ static void string_escape( std::ostream & ostrm, const std::string & str )
                 }
 
                 if( ch == '\0' ) break ;
-                assert(ptr);
                 ostrm << ptr ;
                 beg = it + 1 ;
         }
