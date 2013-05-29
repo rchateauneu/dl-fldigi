@@ -38,6 +38,7 @@ extern unsigned int log2u(unsigned int x);
 
 extern unsigned char graydecode(unsigned char data);
 extern unsigned char grayencode(unsigned char data);
+extern unsigned int round_up_next_pow_two(unsigned int v);
 extern void MilliSleep(long msecs);
 
 inline double sinc(double x)
@@ -58,7 +59,7 @@ inline double clamp(double x, double min, double max)
 inline double decayavg(double average, double input, double weight)
 {
 	if (weight <= 1.0) return input;
-	return input * (1.0 / weight) + average * (1.0 - (1.0 / weight));
+	return ( input - average ) / weight + average ;
 }
 
 // following are defined inline to provide best performance

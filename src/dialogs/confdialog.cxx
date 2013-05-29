@@ -6106,7 +6106,7 @@ an merging"));
                 cntrWfwidth->labelsize(14);
                 cntrWfwidth->labelcolor(FL_FOREGROUND_COLOR);
                 cntrWfwidth->minimum(2000);
-                cntrWfwidth->maximum(4000);
+                cntrWfwidth->maximum(16000);
                 cntrWfwidth->step(100);
                 cntrWfwidth->value(3000);
                 cntrWfwidth->callback((Fl_Callback*)cb_cntrWfwidth);
@@ -6132,7 +6132,7 @@ an merging"));
                 cntrWfheight->labelsize(14);
                 cntrWfheight->labelcolor(FL_FOREGROUND_COLOR);
                 cntrWfheight->minimum(100);
-                cntrWfheight->maximum(160);
+                cntrWfheight->maximum(300);
                 cntrWfheight->step(5);
                 cntrWfheight->value(120);
                 cntrWfheight->callback((Fl_Callback*)cb_cntrWfheight);
@@ -6194,7 +6194,8 @@ an merging"));
         } // Fl_Tabs* tabsWaterfall
         tabWaterfall->end();
       } // Fl_Group* tabWaterfall
-      { tabModems = new Fl_Group(-4, 25, 595, 347, _("Modems"));
+      { tabModems = new Fl_Group(0, 25, 595, 347, _("Modems"));
+        tabModems->hide();
         { tabsModems = new Fl_Tabs(0, 25, 540, 347);
           tabsModems->selection_color(FL_LIGHT1);
           tabsModems->align(Fl_Align(FL_ALIGN_TOP_RIGHT));
