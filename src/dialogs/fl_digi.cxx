@@ -957,6 +957,10 @@ void remove_windows()
 		delete cboHamlibRig;
 		delete dlgConfig;
 	}
+	if (dlgRecordLoader) {
+		dlgRecordLoader->hide();
+		delete dlgRecordLoader;
+	}
 	if (font_browser) {
 		font_browser->hide();
 		delete font_browser;
@@ -1982,6 +1986,7 @@ void cb_ShowConfig(Fl_Widget*, void*)
 	cb_mnuVisitURL(0, (void*)HomeDir.c_str());
 }
 
+/// Opens the window for downloading data files.
 static void cb_ShowDATA(Fl_Widget*, void*)
 {
 	/// Must be already created by createRecordLoader()
@@ -3811,8 +3816,6 @@ void showOpBrowserView(Fl_Widget *, void *)
 	qso_opPICK->box(FL_DOWN_BOX);
 	qso_opBrowser->take_focus();
 	qso_opPICK->tooltip(_("Close List"));
-
-	// qso_addFreq( true );
 }
 
 void CloseQsoView()
@@ -3904,25 +3907,29 @@ void cb_qso_inpAct(Fl_Widget*, void*)
 		qsy(strtoll(str[j - 1].erase(str[j - 1].find(' ')).c_str(), NULL, 10));
 }
 
-/// Callback of the frequencies list.
-static void cb_qso_opBrowser(Fl_Browser*, void*)
+/// This makes the multi browser behave more like a hold browser,
+/// but with the ability to invoke the callback via space/return.
+static void opBrowserJump( int selLin )
 {
-	/// Returns the line number of the currently selected line, or 0 if none.
-	int selLin = qso_opBrowser->value();
-
-	/// Fl_Button+n means mouse button n
-	int key = Fl::event_key();
-
-	LOG_INFO("selLin=%d key=%d", selLin, key );
-
-	if (!selLin) return;
+	qso_opBrowser->deselect();
 
 	int nbLin = qso_opBrowser->size();
 
-	/// This makes the multi browser behave more like a hold browser,
-	/// but with the ability to invoke the callback via space/return.
-	qso_opBrowser->deselect();
+	if( selLin < 1 ) selLin = 1 ;
+		else if ( selLin > nbLin )
+			selLin = nbLin ;
 
+	qso_opBrowser->select(selLin);
+	qso_selectFreq();
+}
+
+/// Callback of the frequencies list.
+static void cb_qso_opBrowser(Fl_Browser*, void*)
+{
+	/// Fl_Button+n means mouse button n
+	int key = Fl::event_key();
+
+	int selLin = qso_opBrowser->value();
 
 	switch (key) {
 	case FL_Button + FL_LEFT_MOUSE:
@@ -3945,36 +3952,12 @@ static void cb_qso_opBrowser(Fl_Browser*, void*)
 		break;
 
 	case FL_Button + FL_MIDDLE_MOUSE:
-		qso_delFreq();
-		qso_addFreq();
-		break;
-#ifdef Marche_pas_car_tyouche_filtree_chais_pas_comment
-	case FL_Home:
-		selLin = 1 ;
-		break;
-	/// Fl_Button+
-	case FL_End:
-		selLin = nbLin;
-	case FL_Page_Up:
-		selLin -= 5 ;
-		break;
-	case FL_Page_Down:
-		selLin += 10 ;
-		break;
-	case FL_Up:
-		break;
-	case FL_Right:
-		break;
-#endif
+		qso_updateFreqColor(selLin);
+		return;
 	default:
 		return;
 	}
-	if( selLin < 1 ) selLin = 1 ;
-	else if ( selLin > nbLin )
-		selLin = nbLin ;
-
-	qso_opBrowser->select(selLin);
-	qso_selectFreq();
+	opBrowserJump(selLin);
 }
 
 /// Called by the radio control loop, or XML/RPC, and the widget callback.
@@ -3984,6 +3967,7 @@ void show_frequency(long long freq)
 	qsoFreqDisp1->value(freq);
 	qsoFreqDisp2->value(freq);
 	qsoFreqDisp3->value(freq);
+	/// Without these remote call, it crashes very easily when tuning the rig.
 	REQ_SYNC( qso_displayFreq, freq);
 }
 
@@ -4604,29 +4588,27 @@ void create_fl_digi_main_primary() {
 			qso_inpAct->callback(cb_qso_inpAct);
 			qso_inpAct->tooltip(_("Grid prefix for activity list"));
 
-			static const int btnWidth = 80 ;
+			static const int btnWidth = 90 ;
 
-#ifdef Freq_Fl_Browser
+			/// This filters key to tune the frequency we are on.
 			struct Freq_Fl_Browser : public Fl_Browser
 			{
 				Freq_Fl_Browser( int X, int Y, int W, int H ) : Fl_Browser( X, Y, W, H ) {}
 
-				// cb_qso_opBrowser
+				/// When clicking or typing a key.
 				int handle(int e) {
 					int ret = Fl_Browser::handle(e);
+					/// Tunes to the frequency indicated by the line number of the frequency list.
 					if( e == FL_KEYDOWN ) {
-						int k = Fl::event_key();
-						LOG_INFO("Key=%d",k);
+						int selLin = lineno(selection());
+						opBrowserJump( selLin );
 					}
 					return ret ;
 				}
-				// Certes mais on ne sait pas dans quelle ligne le curseur se trouve.
 			};
 
+			/// "25" is the width of a vertical scrollbar.
 			qso_opBrowser = new Freq_Fl_Browser(
-#else
-			qso_opBrowser = new Fl_Browser(
-#endif
 				rightof(qso_btnDelFreq) + pad,  Hmenu + pad,
 				opB_w - Wbtn -25 - btnWidth, Hqsoframe - 2 * pad );
 			qso_opBrowser->tooltip(_("Select operating parameters"));
@@ -4635,6 +4617,8 @@ void create_fl_digi_main_primary() {
 			qso_opBrowser->box(FL_DOWN_BOX);
 			qso_opBrowser->labelfont(4);
 			qso_opBrowser->labelsize(12);
+			/// No need of horizontal scroll because the lines are always short.
+			qso_opBrowser->has_scrollbar(Fl_Scroll::VERTICAL);
 #ifdef __APPLE__
 			qso_opBrowser->textfont(FL_COURIER_BOLD);
 			qso_opBrowser->textsize(16);
@@ -4644,20 +4628,8 @@ void create_fl_digi_main_primary() {
 #endif
 
 			static const int frqHorPos = progStatus.mainW - btnWidth - pad;
-			static const int frqVrtSz = Hmenu + pad ;
-			Fl_Button     * btnLoadFreqList = new Fl_Button( frqHorPos,     frqVrtSz, btnWidth, Hmenu, _("Load..."));
-			btnLoadFreqList->tooltip(_("Load frequency lists"));
-			btnLoadFreqList->callback(cb_LoadFreqList, 0);
-
-			Fl_Light_Button * btnEIBI = new Fl_Light_Button( frqHorPos, 2 * frqVrtSz, btnWidth, Hmenu, "EIBI");
-			btnEIBI->selection_color(FL_MAGENTA);
-			btnEIBI->callback(cb_EIBI, 0);
-			btnEIBI->tooltip(_("Load EIBI frequency list"));
-
-			Fl_Light_Button * btnMWLs = new Fl_Light_Button( frqHorPos, 3 * frqVrtSz, btnWidth, Hmenu, "MWList");
-			btnMWLs->selection_color(FL_BLUE);
-			btnMWLs->callback(cb_MWList, 0);
-			btnMWLs->tooltip(_("Load MWList frequency list"));
+			static const int frqVrtPos = Hmenu + pad ;
+			qso_createFreqList( frqHorPos, frqVrtPos, btnWidth, Hqsoframe - 2 * pad, pad, Hentry );
 
 			RigViewerFrame->resizable(qso_opBrowser);
 
@@ -6956,7 +6928,6 @@ void note_qrg(bool no_dup, const char* prefix, const char* suffix, trx_mode mode
 {
 	qrg_mode_t m(
 			rfc ? rfc : wf->rfcarrier(),
-			"",
 			afreq ? afreq : active_modem->get_freq(),
 			mode < NUM_MODES ? mode : active_modem->get_mode() );
         if (no_dup && last_marked_qrg == m)

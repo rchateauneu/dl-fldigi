@@ -6,6 +6,8 @@
 //		Dave Freese, W1HKJ
 // Copyright (C) 2007-2010
 //		Stelios Bounanos, M0GLD
+// Copyright (C) 2013
+//		Remi Chateauneu, F4ECW
 //
 // This file is part of fldigi.  Adapted in part from code contained in gmfsk
 // source code distribution.
@@ -29,6 +31,7 @@
 
 #include <stdint.h>
 #include <string>
+#include <bitset>
 
 enum state_t {
 	STATE_PAUSE = 0,
@@ -206,7 +209,8 @@ enum {
 	NUM_RXTX_MODES = NUM_MODES - 2
 };
 
-typedef intptr_t trx_mode;
+/// A normal int is enough.
+typedef int trx_mode;
 
 struct mode_info_t {
 	trx_mode mode;
@@ -219,84 +223,34 @@ struct mode_info_t {
 };
 extern const struct mode_info_t mode_info[NUM_MODES];
 
-/// Stores a element of the frequency list.
+/// Returns NUM_MODES if not found.
+trx_mode trx_mode_lookup( const std::string & sMode );
+
+/// Stores an element of the frequency list.
 class qrg_mode_t
 {
 public:
-	long long   rfcarrier;
-	std::string rmode;
-	int         carrier;
+	long long   rfcarrier; /// Frequency.
+	int         carrier;   /// Typically 1000 Hz, does not need to be huge.
 	trx_mode    mode;
-	std::string name;
-	std::string description;
-	short       time_on;  // 0000 to 2359
-	short       time_off; // 0000 to 2359
-	char        week_schedule : 7 ;
-
-	typedef enum {
-		FREQS_NONE,
-		FREQS_EIBI,
-		FREQS_MWLIST,
-		FREQS_UNKNOWN
-	} FreqSource ;
-
-	FreqSource data_source ;
-
-	enum {
-		WEEK_SUNDAY    = 0,
-		WEEK_MONDAY    = 1,
-		WEEK_TUESDAY   = 2,
-		WEEK_WEDNESDAY = 3,
-		WEEK_THURSDAY  = 4,
-		WEEK_FRIDAY    = 5,
-		WEEK_SATURDAY  = 6
-	};
-	// Other data might follow such as the country or the language but we do not care.
-
-	/// Some data come from fixed files, no need to save them.
-	bool is_source(FreqSource src) const { return data_source == src ; }
-
-	/// Empty strings take no space.
-	qrg_mode_t(long long rfcarr=0);
 
 	qrg_mode_t(
-		long long rfcarr,
-		const char *rmd,
-		int carr,
-		const trx_mode & trxmd,
-		const char * nam = NULL,
-		const char * dsc = NULL );
+		long long  rfcrr = 0,
+		int        carr  = 0,
+		trx_mode   trxmd = NUM_MODES )
+	: rfcarrier(rfcrr)
+	, carrier(carr)
+	, mode(trxmd) {}
 
-	/// It is stored in a vector sorted by frequency.
-	bool operator<(const qrg_mode_t& rhs) const
-	{
-		int ret ;
-		( ret = rfcarrier - rhs.rfcarrier  ) ||
-		( ret =	mode - rhs.mode            ) ||
-		( ret =	carrier - rhs.carrier      ) ||
-		( ret =	rmode.compare( rhs.rmode ) ) ||
-		( ret =	name.compare( rhs.name ) );
-		return ret < 0 ;
-	}
-	/// Compare first the integer members because it is faster.
+	/// Compare first the members which changes the most often.
 	bool operator==(const qrg_mode_t& rhs) const
 	{
 		return rfcarrier == rhs.rfcarrier
-		&& mode == rhs.mode
-		&& carrier == rhs.carrier
-		&& rmode == rhs.rmode
-		&& name  == rhs.name ;
+		&&     mode      == rhs.mode
+		&&     carrier   == rhs.carrier;
 	}
-
-	std::string str(void) const ;
-
-	friend std::ostream& operator<<(std::ostream& s, const qrg_mode_t& m);
-
-	friend std::istream& operator>>(std::istream& s, qrg_mode_t& m);
-
 };
 
-#include <bitset>
 class mode_set_t : public std::bitset<NUM_RXTX_MODES> { };
 
 enum band_t {

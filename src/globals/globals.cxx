@@ -31,10 +31,12 @@
 #include <cstdlib>
 #include <cerrno>
 #include <cstdio>
+#include <map>
 
 #include "gettext.h"
 #include "globals.h"
 #include "modem.h"
+#include "strutil.h"
 
 using namespace std;
 
@@ -183,226 +185,6 @@ const struct mode_info_t mode_info[NUM_MODES] = {
 
 };
 
-/// Empty strings take no space, so no init.
-qrg_mode_t::qrg_mode_t(long long rfcarr)
-: rfcarrier(rfcarr)
-, carrier(0)
-, mode(NUM_MODES)
-, data_source(FREQS_UNKNOWN)
-{
-	/// GCC has strings reference counting.
-	static const std::string none_mode("NONE");
-
-	/// Very quick copy.
-	rmode = none_mode ;
-}
-
-qrg_mode_t::qrg_mode_t(
-	long long        rfcrr,
-	const char     * rmd,
-	int              carr,
-	const trx_mode & trxmd,
-	const char     * nam,
-	const char     * dsc )
-{
-	rfcarrier = rfcrr ;
-	/// TODO: Not many possible values, we should use reference counting.
-	rmode = rmd ;
-	carrier = carr ;
-	mode = trxmd;
-	if(nam) name = nam ;
-	if(dsc) description = dsc ;
-	data_source = FREQS_NONE ;
-}
-
-/// Surrounds a string with double-quotes and escapes control chars.
-static void string_escape( std::ostream & ostrm, const std::string & str )
-{
-	ostrm << '"';
-        for( const char * it = str.c_str(), * beg = it, * ptr = NULL ; ; ++it )
-        {
-                char ch = *it ;
-                switch( ch )
-                {
-			/// TODO: Printf the hexadecimal value.
-                        case '"'    : ptr = "\""; break;
-                        case '\n'   : ptr = "\\n"; break;
-                        case '\r'   : ptr = "\\r"; break;
-                        case '\b'   : ptr = "\\b"; break;
-                        case '\t'   : ptr = "\\t"; break;
-                        case '\0'  : break ;
-                        default    : continue ;
-                }
-                if( it != beg ) {
-                        ostrm.write( beg, it - beg );
-                }
-
-                if( ch == '\0' ) break ;
-                ostrm << ptr ;
-                beg = it + 1 ;
-        }
-	ostrm << '"';
-}
-
-/// Reads a string surrounded by double-quotes.
-static void string_unescape( std::istream & istrm, std::string & str )
-{
-	if( ! str.empty() ) str.clear();
-	bool is_quoted = false ;
-	for(;;) {
-		/// Starts to read only after the double-quote.
-		char ch = istrm.get();
-		switch(ch) {
-			case ' '  : /// The string is not started yet.
-			case '\t' : continue ;
-			case '\r' : /// String ends before having started.
-			case '\n' :
-			case  -1  : return ;
-			default   : is_quoted = false ;
-				    break ;
-			case '"'  : is_quoted = true;
-				    break ;
-		}
-		break ;
-	}
-
-	/// Any chars can be between the quotes if it is escaped.
-	bool backslashed = false ;
-	for(;;) {
-		char ch = istrm.get();
-		if( backslashed ) {
-			backslashed = false ;
-			switch(ch) {
-				case -1  : return;
-				case '"' : str += '\"'; continue;
-				case 'r' : str += '\r'; continue;
-				case 'n' : str += '\n'; continue;
-				case 'b' : str += '\b'; continue;
-				case 't' : str += '\t'; continue;
-				/// This should not happen, but we accept that all chars can be escaped.
-				default  : str += ch; continue ;
-			}
-		} else {
-			switch(ch) {
-				case -1  :
-				case '\r':
-				case '\n':
-				case '\0':
-				case '"' : return ;
-				case '\\': backslashed = true ; continue ;
-				case ' ' : /// Spaces and tabs end the string if it was not quoted.
-				case '\t': if( ! is_quoted ) return ;
-				default  : str += ch ; continue ;
-			}
-		}
-	}
-}
-
-std::ostream& operator<<(std::ostream& s, const qrg_mode_t& m)
-{
-	s << m.rfcarrier << ' ' << m.rmode << ' ' << m.carrier << ' ' << mode_info[m.mode].sname;
-
-	s << ' ';
-	string_escape(s,m.name);
-	s << ' ';
-	string_escape(s,m.description);
-
-	return s ;
-}
-
-/// Reads from the private frequencies file.
-std::istream& operator>>(std::istream& s, qrg_mode_t& m)
-{
-	string sMode;
-	int mnbr;
-
-	/// The frequencies should be integer, but we tolerate floating point values.
-	double dbl_rfcarrier, dbl_carrier ;
-	s >> dbl_rfcarrier >> m.rmode >> dbl_carrier >> sMode;
-	m.rfcarrier = dbl_rfcarrier ;
-	m.carrier = dbl_carrier ;
-
-	/// handle case for reading older type of specification string
-	if (sscanf(sMode.c_str(), "%d", &mnbr)) {
-		m.mode = mnbr;
-	} else {
-		m.mode = MODE_PSK31;
-		/// The frequency could specify a NULL modem.
-		for (mnbr = MODE_NULL; mnbr < NUM_MODES; mnbr++)
-			if (sMode == mode_info[mnbr].sname) {
-				m.mode = mnbr;
-				break;
-			}
-	}
-
-	/// Now there might be optional information.
-	string_unescape(s,m.name);
-	string_unescape(s,m.description);
-
-	/// These frequencies must always be saved.
-	m.data_source = qrg_mode_t::FREQS_NONE;
-
-	return s;
-}
-
-/// Creates a string inserted in the scrolling menu.
-std::string qrg_mode_t::str(void) const
-{
-	/// Longest string is 12 chars. "NULL" replaced by empty string.
-	const char * modstr = ( mode == 0 )
-		? ""
-		: ( mode > 0 ) && (mode < NUM_MODES)
-			? mode_info[mode].sname
-			: "?";
-
-	/// snprintf faster than iostream.
-	char buf[256] ;
-
-	/*
-		FL_BLACK,
-		FL_RED,
-		FL_GREEN,
-		FL_YELLOW,
-		FL_BLUE,
-		FL_MAGENTA,
-		FL_CYAN,
-		// FL_WHITE,
-		// FL_GRAY
-	*/
-
-	int color = 
-		data_source == FREQS_NONE   ? FL_BLACK :
-		data_source == FREQS_EIBI   ? FL_MAGENTA :
-		data_source == FREQS_MWLIST ? FL_BLUE :
-		FL_RED ;
-	
-
-#define FMT_COLOR "@C%d"
-
-	/// If the name is too long, we pack name and description.
-	const char * fmtstr = ( name.size() >= 12 )
-	?	description.size() == 0
-		?	FMT_COLOR "%11.3lf %-7s%-9s %5d %s%s"
-		:	FMT_COLOR "%11.3lf %-7s%-9s %5d %s, %s"
-	:		FMT_COLOR "%11.3lf %-7s%-9s %5d %-12.12s %s";
-
-	const char * tmp_rmode = rmode == "NULL" ? "" : rmode.c_str();
-
-	snprintf(
-		buf,
-		sizeof(buf),
-		fmtstr,
-		color,
-		rfcarrier/1000.0, /// Max realistic value is 1 GHz
-		tmp_rmode,
-		modstr,
-		carrier,
-		name.c_str(),
-		description.c_str() );
-
-	return buf ;
-}
-
 band_t band(long long freq_hz)
 {
 	switch (freq_hz / 1000000LL) {
@@ -509,3 +291,28 @@ const char* band_freq(const char* band_name)
 
 	return "";
 }
+
+/// Lookup of the TX mode, "PSK31" => MODE_PSK31, or NUM_MODES if not found.
+trx_mode trx_mode_lookup( const std::string & sMode )
+{
+	/// Consider hash_map when available on all platforms.
+	typedef std::map< std::string, trx_mode > ModeToTrxMap ;
+
+	/// Do not change between calls.
+	static ModeToTrxMap mapLookup ;
+
+	/// First time it is called, we fill an internal cache.
+	if( mapLookup.empty() )
+	{
+		for ( trx_mode mnbr = MODE_NULL; mnbr < NUM_MODES; mnbr++)
+		{
+			mapLookup[ mode_info[mnbr].sname ] = mnbr ;
+		}
+	}
+
+	/// A map is faster than a linear search because there are about 140 modes and growing.
+	ModeToTrxMap::const_iterator it = mapLookup.find( sMode );
+
+	return it == mapLookup.end() ? NUM_MODES : it->second ;
+}
+

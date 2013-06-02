@@ -20,9 +20,9 @@ extern int  cb_qso_opBW();
 extern void qso_setMode();
 extern void setTitle();
 
-extern void cb_LoadFreqList( Fl_Widget *, void *);
-extern void cb_EIBI( Fl_Widget *, void *);
-extern void cb_MWList( Fl_Widget *, void *);
+
+extern void qso_createFreqList(int frqHorPos, int frqVrtPos, int btnWidth, int totalHeight, int Hmenu, int pad );
+extern void qso_updateFreqColor(int selLin);
 extern void qso_addFreq();
 extern void qso_delFreq();
 extern void qso_displayFreq( long long freq );

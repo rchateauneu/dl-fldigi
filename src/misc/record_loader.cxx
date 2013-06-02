@@ -42,6 +42,7 @@
 #include <stdexcept>
 #include <fstream>
 #include <iostream>
+#include <limits>
 
 #include <sys/stat.h>
 
@@ -57,19 +58,32 @@ int RecordLoaderInterface::LoadAndRegister()
 	std::string filnam = storage_filename().first;
 
 	time_t cntTim = time(NULL);
-	LOG_INFO("Opening:%s", filnam.c_str());
+	LOG_DEBUG("Opening:%s", filnam.c_str());
 
 	std::ifstream ifs( filnam.c_str() );
 
 	/// Reuse the same string for each new record.
 	std::string input_str ;
+
+	/// Number of records succesfully read.
 	size_t nbRec = 0 ;
+
+	/// Number of records which could not be read.
+	int nbErrs = 0 ;
+
+	/// Do not display too many errors.
+	static const int maxErrs = 3 ;
+
 	while( ! ifs.eof() )
 	{
 		if( ! std::getline( ifs, input_str ) ) break;
 
-		/// Comments are legal with # as first character.
-		if( input_str[0] == '#' ) continue;
+		if( input_str.empty() ) continue ;
+		switch( input_str[0] ) {
+			case '#' : /// Comments are legal with # as first character.
+			case '\n': /// Empty lines not used.
+			case '\r': continue ;
+		}
 
 		imemstream str_strm( input_str );
 		try
@@ -77,7 +91,9 @@ int RecordLoaderInterface::LoadAndRegister()
 			if( ReadRecord( str_strm ) ) {
 				++nbRec;
 			} else {
-				LOG_WARN( "Cannot process '%s'", input_str.c_str() );
+				++nbErrs ;
+				if( nbErrs < maxErrs )
+					LOG_INFO( "Cannot process '%s'", input_str.c_str() );
 			}
 		}
 		catch(const std::exception & exc)
@@ -90,14 +106,15 @@ int RecordLoaderInterface::LoadAndRegister()
 		}
 	}
 	ifs.close();
-	LOG_INFO( "Read:%s with %d records in %d seconds",
-		filnam.c_str(), nbRec, (int)( time(NULL) - cntTim ) );
+	LOG_INFO( "Read:%s, %d good records, %d faulty ones in %d seconds",
+		filnam.c_str(), nbRec, nbErrs, (int)( time(NULL) - cntTim ) );
 	return nbRec ;
 }
 
 // ----------------------------------------------------------------------------
 
-struct Row
+/// It models a row in the menu of data files downloading.
+struct DatafileRow
 {
 	Fl_Output             * m_timestamp ;
 	Fl_Check_Button       * m_select ;
@@ -106,6 +123,7 @@ struct Row
 	Fl_Button             * m_url ;
 	RecordLoaderInterface * m_itf ;
 
+	/// Called after row change. Tells if the local file could be parsed.
 	bool UpdateRow()
 	{
 		const std::string str = m_itf->Timestamp();
@@ -128,17 +146,18 @@ struct Row
 			const std::string strnam = m_itf->base_filename();
 			m_url->tooltip( strurl );
 		}
-		dlgRecordLoader->damage();
+		if(dlgRecordLoader) dlgRecordLoader->damage();
 		return isGood ;
 	}
 };
 
 /// Array all data loaders. It is setup at start time.
-static Row * all_recs = NULL ;
+static DatafileRow * all_recs = NULL ;
 
 /// Number of data loaders, it is a very small integer.
 static int dataloader_nb = 0 ;
 
+/// Columns of the table of files to download.
 static const int nb_cols = 5 ;
 
 // ----------------------------------------------------------------------------
@@ -148,7 +167,7 @@ RecordLoaderInterface::RecordLoaderInterface()
 {
 	++dataloader_nb ;
 	/// We prefer tp use realloc because it is ready before main() is called.
-	all_recs = (Row *)realloc( all_recs, dataloader_nb * sizeof( Row ) );
+	all_recs = (DatafileRow *)realloc( all_recs, dataloader_nb * sizeof( DatafileRow ) );
 
 	all_recs[ dataloader_nb - 1 ].m_itf = this ;
 }
@@ -159,7 +178,7 @@ RecordLoaderInterface::~RecordLoaderInterface()
 	for( int i = 0; i < dataloader_nb; ++i )
 	{
 		if( all_recs[i].m_itf == this ) {
-			memmove( all_recs + i, all_recs + i + 1, sizeof( Row ) * ( dataloader_nb - i - 1 ) );
+			memmove( all_recs + i, all_recs + i + 1, sizeof( DatafileRow ) * ( dataloader_nb - i - 1 ) );
 			--dataloader_nb ;
 			return ;
 		}
@@ -183,6 +202,7 @@ std::string RecordLoaderInterface::base_filename() const
 	return std::string( pFil, quest );
 }
 
+/// Returns the local path of the file, where it is available, where we must store it.
 std::pair< std::string, bool > RecordLoaderInterface::storage_filename(bool create_dir) const
 {
 	/// We check if it is changed, it is not performance-critical.
@@ -195,7 +215,9 @@ std::pair< std::string, bool > RecordLoaderInterface::storage_filename(bool crea
 		}
 	}
 
+	/// Where the downloaded files are stored. They can be erased by the user.
 	std::string filnam_data = DATA_dir + "/" + base_filename();
+
 	if( create_dir ) {
 		return std::make_pair( filnam_data, false );
 	}
@@ -214,7 +236,7 @@ std::pair< std::string, bool > RecordLoaderInterface::storage_filename(bool crea
 
 	// Second try with a file maybe installed by "make install".
 	std::string filnam_inst = PKGDATADIR "/" + base_filename();
-	LOG_INFO("Errno=%s with %s. Trying %s", strerror(errno), filnam_data.c_str(), filnam_inst.c_str() );
+	LOG_DEBUG("Errno=%s with %s. Trying %s", strerror(errno), filnam_data.c_str(), filnam_inst.c_str() );
 	ifs.open( filnam_inst.c_str() );
 	if( ifs )
 	{
@@ -225,6 +247,7 @@ std::pair< std::string, bool > RecordLoaderInterface::storage_filename(bool crea
 	return std::make_pair( filnam_data, false );
 }
 
+/// When the file was last updated.
 std::string RecordLoaderInterface::Timestamp() const
 {
 	std::string filnam = storage_filename().first;
@@ -245,6 +268,7 @@ std::string RecordLoaderInterface::Timestamp() const
 	return buf ;
 }
 
+/// Size of a data file in bytes.
 std::string RecordLoaderInterface::ContentSize() const
 {
 	/// It would be faster to cache this result in the object.
@@ -260,15 +284,17 @@ std::string RecordLoaderInterface::ContentSize() const
 
 // ----------------------------------------------------------------------------
 
+/// When the user clicks to open the URL of a data file.
 static void cb_record_url(Fl_Widget *w, void* ptr)
 {
 	const RecordLoaderInterface * it = static_cast< const RecordLoaderInterface * >(ptr);
 	cb_mnuVisitURL( NULL, const_cast< char * >( it->Url() ) );
 }
 
+/// Builds a Fl_Table row associated to a data file.
 void DerivedRecordLst::AddRow( int row )
 {
-	Row * ptRow = all_recs + row ;
+	DatafileRow * ptRow = all_recs + row ;
 
 	int X,Y,W,H;
 	int col=0;
@@ -314,6 +340,7 @@ void DerivedRecordLst::AddRow( int row )
 		if( strurl != NULL ) {
 			const std::string strnam = ptRow->m_itf->base_filename();
 
+			/// It has to be duplicated.
 			ptRow->m_url = new Fl_Button(X,Y,W,H, strdup(strnam.c_str()) );
 			ptRow->m_url->tooltip( strurl );
 			ptRow->m_url->callback(cb_record_url, ptRow->m_itf);
@@ -356,7 +383,8 @@ void DerivedRecordLst::draw_cell(TableContext context,
 	switch ( context )
 	{
 	case CONTEXT_STARTPAGE:
-		fl_font(FL_HELVETICA, 12);		// font used by all headers
+		// font used by all headers. TODO: Maybe use global font and size?
+		fl_font(FL_HELVETICA, 12);
 		break;
 
 	case CONTEXT_RC_RESIZE:
@@ -397,6 +425,7 @@ void DerivedRecordLst::draw_cell(TableContext context,
 	case CONTEXT_COL_HEADER:
 		fl_push_clip(X, Y, W, H);
 		{
+			/// These are the column names.
 			static const char * col_names[nb_cols] = {
 				_("Timestamp"),
 				_(" "),
@@ -405,6 +434,7 @@ void DerivedRecordLst::draw_cell(TableContext context,
 				_("WWW"),
 			};
 
+			/// Just in case the column index is too big or too small.
 			const char * title = ( ( C >= 0 ) && ( C < nb_cols ) ) ? col_names[C] : "?" ;
 
 			fl_draw_box(FL_THIN_UP_BOX, X, Y, W, H, col_header_color());
@@ -422,6 +452,7 @@ void DerivedRecordLst::draw_cell(TableContext context,
 	}
 }
 
+/// If the user clicks the button "Update" which downloads data files.
 void DerivedRecordLst::cbGuiUpdate()
 {
 	std::string server = inpDataSources->value();
@@ -434,14 +465,16 @@ void DerivedRecordLst::cbGuiUpdate()
 
 	for( int row = 0; row < dataloader_nb; ++row )
 	{
-		Row * ptrRow = all_recs + row;
+		DatafileRow * ptrRow = all_recs + row;
 		if( ! ptrRow->m_select->value() ) continue ;
 		RecordLoaderInterface * it = ptrRow->m_itf;
 
 		std::string url = server + it->base_filename();
 		std::string reply ;
 
+		/// This makes ten minutes, big enough for 2 megabytes.
 		double timeout=600.0;
+
 		// Consider truncating the HTTP header.
 		int res = fetch_http_gui(url, reply, timeout );
 		LOG_INFO("Loaded %s : %d chars. res=%d", url.c_str(), (int)reply.size(), res );
@@ -502,13 +535,12 @@ void DerivedRecordLst::cbGuiUpdate()
 	btnDataSourceUpdate->value(0);
 }
 
+/// When the user clicks to erase all selected data files.
 void DerivedRecordLst::cbGuiReset()
 {
-	fprintf(stderr, "%s\n", __FUNCTION__ );
-
 	for( int row = 0; row < dataloader_nb; ++row )
 	{
-		Row * ptrRow = all_recs + row;
+		DatafileRow * ptrRow = all_recs + row;
 		if( ! ptrRow->m_select->value() ) continue ;
 		RecordLoaderInterface * it = ptrRow->m_itf;
 
@@ -551,15 +583,102 @@ static void fl_input_add( const char * str )
 	inpDataSources->add( fl_escape( str ).c_str() );
 }
 
+/// This is called at startup, and once only.
 void createRecordLoader()
 {
 	if (dlgRecordLoader) return; 
 	dlgRecordLoader = make_record_loader_window();
-	fl_input_add("http://www.w1hkj.com/data");
-	fl_input_add("http://fldigi.org/data/");
-	fl_input_add("http://primhillcomputers.com/fldigi/data");
+	dlgRecordLoader->xclass(PACKAGE_NAME);
+
+	static const char * urlDataSources[] = {
+		"http://www.w1hkj.com/data",
+		"http://fldigi.org/data/",
+		"http://primhillcomputers.com/fldigi/data"
+	};
+	static const size_t nbDataSources = sizeof(urlDataSources) / sizeof(*urlDataSources);
+
+	for( size_t i = 0; i < nbDataSources; ++i )
+	{
+		fl_input_add( urlDataSources[i] );
+	}
 
 	inpDataSources->value(0);
 }
 // ----------------------------------------------------------------------------
+/// Just reads all chars until the delimiter.
+bool read_until_delim( char delim, std::istream & istrm )
+{
+	istrm.ignore ( std::numeric_limits<std::streamsize>::max(), delim );
+	if(istrm.eof()) return true ;
+	return istrm.bad() ? false : true ;
+}
+
+/// Reads a string up to the given delimiter.
+bool read_until_delim( char delim, std::istream & istrm, std::string & ref )
+{
+	return std::getline( istrm, ref, delim );
+}
+
+/// Reads a double up to the given delimiter.
+bool read_until_delim( char delim, std::istream & istrm, double & ref )
+{
+	istrm >> ref ;
+	if( ! istrm ) return false ;
+
+	char tmp = istrm.get(); // reads also the delimiter.
+	if( istrm.eof() ) { // Maybe end of line ?
+		/// Resets to good to mean that it worked fine.
+		istrm.clear();
+		return true ;
+	}
+	return tmp == delim ;
+}
+
+/// Reads a double up to the given delimiter, with a default value.
+bool read_until_delim( char delim, std::istream & istrm, double & ref, double dflt )
+{
+	istrm >> ref ;
+	bool read_ok = istrm ;
+
+	/// We want to be able to read the next character anyway.
+	if( ! read_ok )
+		istrm.clear();
+
+	char tmp = istrm.get();
+	if( istrm.eof() ) {
+		istrm.clear();
+		/// Resets to good to mean that it worked fine.
+		if( ! read_ok ) ref = dflt ;
+		return true ;
+	}
+	if( tmp == delim ) {
+		istrm.clear();
+		if( ! read_ok ) ref = dflt ;
+		return true ;
+	}
+	std::cout << "f=" << ref << " c=" << (int)tmp << "\n";
+	return false ;
+}
+
+
+/// Reads a char up to the given delimiter, or returns the default value if there is none.
+bool read_until_delim( char delim, std::istream & istrm, char & ref, const char dflt )
+{
+	if(istrm.eof()) {
+		ref = dflt ;
+		return true ;
+	}
+	ref = istrm.get();
+	if( istrm.bad() ) return false;
+	if( ref == delim ) {
+		ref = dflt ;
+		return true ;
+	}
+	char tmpc = istrm.get();
+	if( istrm.eof() ) return true;
+	if( tmpc == delim ) return true ;
+	if( tmpc == '\n' ) return true ;
+	if( tmpc == '\r' ) return true ;
+	return false;
+}
 

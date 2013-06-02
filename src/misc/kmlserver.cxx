@@ -84,6 +84,10 @@ static time_t KmlFromTimestamp( const char * ts ) {
 	if( 0 == strcmp( ts, KmlSrvUnique ) ) return KmlServer::UniqueEvent ;
 
 	tm objTm ;
+
+	/// So all fields are initialised with correct default values.
+	mktime(&objTm);
+
 	int r = sscanf( ts, "%4d-%02d-%02dT%02d:%02dZ",
 			&objTm.tm_year,
 			&objTm.tm_mon,
@@ -94,6 +98,7 @@ static time_t KmlFromTimestamp( const char * ts ) {
 	objTm.tm_year -= 1900;
 	objTm.tm_mon -= 1;
 	objTm.tm_sec = 0;
+
 	time_t res = mktime( &objTm );
 	if( res < 0 ) throw std::runtime_error("Cannot make timestamp from " + std::string(ts) );
 	return res;
@@ -1104,7 +1109,7 @@ class  KmlSrvImpl : public KmlServer {
 				if( ! avoidNode.empty() ) break ;
 
 				const char * msgTxt = xml->getNodeData();
-				// LOG_INFO( "getNodeData=%s currState=%s", msgTxt, KmlRdToStr(currState) );
+				LOG_DEBUG( "getNodeData=%s currState=%s", msgTxt, KmlRdToStr(currState) );
 				switch(currState) {
 					case KMLRD_FOLDER_NAME : 
 					       currFolderName = msgTxt ? msgTxt : "NullFolder";
@@ -1137,8 +1142,14 @@ class  KmlSrvImpl : public KmlServer {
 						if (!strcmp("Folder", nodeName)) {
 							currState = KMLRD_FOLDER ;
 						} else {
+							/// These tags are not meaningful for us.
+							if(	strcmp( "kml", nodeName ) &&
+								strcmp( "Document", nodeName ) &&
+								strcmp( "name", nodeName ) )
+							{
 							LOG_INFO("Unexpected %s in document %s. currState=%s",
 								nodeName, category.c_str(), KmlRdToStr(currState) );
+							}
 						}
 						break;
 					case KMLRD_FOLDER : 
@@ -1496,7 +1507,7 @@ public:
 		}
 
 		// Now the object is usable. Theoretically should be protected by a mutex.
-		LOG_INFO("Object ready");
+		LOG_DEBUG("Object ready");
 
 		/// Even if an exception was thrown when loading the previous file, it does not 
 		/// prevent to overwrite the old files with new and clean ones.
@@ -1512,7 +1523,7 @@ public:
 	, m_refresh_interval(-1)
 	, m_balloon_style(0)
 	{
-		LOG_INFO("Creation");
+		LOG_DEBUG("Creation");
 		pthread_cond_init( &m_cond_queue, NULL );
 		pthread_mutex_init( &m_mutex_write, NULL );
 
